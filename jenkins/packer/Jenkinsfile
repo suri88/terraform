@@ -1,0 +1,129 @@
+pipeline {
+
+    agent any
+
+    parameters {
+		
+		choice(name: 'role_account',
+            choices: ['707783183724','762127463824','417417470155','919173928247','977425150090','734839700165'],
+            description: "Which account would you like to deploy your RDS?\n 707783183724:ntw\n762127463824:cicd\n417417470155:sss\n919173928247:talendDev\n977425150090:ReportingDev\n734839700165:CyberArk")
+		
+		choice(name: 'role_name',
+
+            choices: ['packer'],
+            description: 'Which account name would you like to deploy your packer?.. Example upsa-sharedservices')
+
+  
+        choice(name: 'aws_region',
+            choices: ['eu-west-3'],
+            description: 'Where would you like to deploy your packer?.. Examples eu-west-1, eu-central-1')
+		
+		string(name: 'packer_path',defaultValue: '', description: 'packer path')
+
+        string(name: 'packer_name',defaultValue: '', description: 'packer name')
+
+        string(name: 'git_branch_name', defaultValue: '', description: 'git branch name')
+
+        
+
+        choice(name: 'env_variables',
+                choices: ['vars'],
+                description: 'Please select the variable file to apply.. Examples vars')
+        
+        choice(name: 'build_option',
+            choices: ['','build'],
+            description: 'Apply will deploy a packer, and build the packer image..')
+
+
+    }
+
+    environment {
+
+        AWS_DEFAULT_REGION = "${params.aws_region}"
+        BUILD_OPTION = "${params.build_option}"
+        DIR_PATH=""
+        
+    }
+
+    stages {
+
+        stage('Parameters') {
+
+            steps {
+
+                echo "You have selected account: ${params.role_account}"
+                echo "You Selected: ${params.aws_region}"
+                 script {
+                DIR_PATH="packer/${packer_path}"
+                 }
+            }
+        }
+
+
+        stage('Clean Directory') {
+
+            steps {
+
+                deleteDir()
+            }
+        }        
+
+        stage('Checkout upsa-repo Repository') {
+
+            steps {
+
+                git branch: "${git_branch_name}",
+                    credentialsId: 'gitlab-cred-id',
+                    url: 'https://gitlab.dev.upsa.cf/Yomi.Ogunyinka/upsa-repos.git'
+            }
+        }
+
+        
+		
+		stage('Build Phase: packer Build') {
+
+            when {
+
+                expression {
+
+                    params.build_option == 'build'
+
+                    }
+                }
+
+            steps {
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+                            dir ("${DIR_PATH}")
+
+                        {
+                           
+                           sh 'packer ${build_option} -var \"region=${aws_region}\" -var-file=${env_variables}.json  ${packer_name}.json'
+                        }
+                    }
+                }
+            }
+        }
+
+
+    }
+}

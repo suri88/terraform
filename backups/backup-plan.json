@@ -1,0 +1,58 @@
+{
+    "BackupPlanName":"VAR-BACKUP-PLAN-NAME",
+    "Rules": [ {
+        "RuleName": "daily_backup",
+        "TargetBackupVaultName" : "VAR-VAULT-NAME",
+        "ScheduleExpression": "cron(0 23 ? * 1-6 *)",
+        "StartWindowMinutes": 60,
+        "CompletionWindowMinutes": 240,
+        "Lifecycle": {
+            "DeleteAfterDays": 30
+        },
+        "RecoveryPointTags" : {
+            "Backup_Schedule" : "Daily"
+        }
+    },
+    {
+        "RuleName": "weekly_backup",
+        "TargetBackupVaultName" : "VAR-VAULT-NAME",
+        "ScheduleExpression": "cron(0 22 ? * 7 *)",
+        "StartWindowMinutes": 60,
+        "CompletionWindowMinutes": 480,
+        "Lifecycle": {
+            "DeleteAfterDays": 30
+        },
+        "RecoveryPointTags" : {
+            "Backup_Schedule" : "Weekly"
+        }
+    },
+    {
+        "RuleName": "monthly_backup",
+        "TargetBackupVaultName" : "VAR-VAULT-NAME",
+        "ScheduleExpression": "cron(30 22 L * ? *)",
+        "StartWindowMinutes": 60,
+        "CompletionWindowMinutes": 600,
+        "Lifecycle": {
+            "MoveToColdStorageAfterDays": 60,
+            "DeleteAfterDays": 390
+        },
+        "RecoveryPointTags" : {
+            "Backup_Schedule" : "Monthly"
+        }
+    },
+    {
+        "RuleName": "yearly_backup",
+        "TargetBackupVaultName" : "VAR-VAULT-NAME",
+        "ScheduleExpression": "cron(30 23 L 12 ? *)",
+        "StartWindowMinutes": 60,
+        "CompletionWindowMinutes": 600,
+        "Lifecycle": {
+            "MoveToColdStorageAfterDays": 60,
+            "DeleteAfterDays": 1825
+        },
+        "RecoveryPointTags" : {
+            "Backup_Schedule" : "Yearly"
+        }
+    } 
+    ]
+}

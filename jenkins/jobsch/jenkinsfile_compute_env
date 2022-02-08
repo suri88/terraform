@@ -1,0 +1,244 @@
+pipeline {
+
+ 
+
+    agent any
+
+ 
+
+    parameters { 
+
+        choice(name: 'role_account',
+            choices: ['762127463824'],
+            description: "Which account would you like to create compute environment")
+        
+        choice(name: 'role_account_name',
+            choices: ['cicd'],
+            description: 'Which account name would you like to create compute env?.. Example upsa-sharedservices')
+ 
+
+        choice(name: 'aws_region',
+            choices: ['eu-west-3'],
+            description: 'Where would you like to create compute env?.. Examples eu-west-1, eu-central-1') 
+
+
+        string(name: 'git_branch_name', defaultValue: '', description: 'git branch name')
+
+        string(name: 'batch_compute_json_name', defaultValue: '', description: 'Compute json template name')
+        string(name: 'compute_environment_name', defaultValue: '', description: 'Compute Environment Name')        
+
+
+        choice(name: 'build_option',
+            choices: ['','create','delete'],
+            description: 'For creating or deleting batch compute environment')
+
+        
+    }
+
+ 
+    environment {
+
+        DIR_PATH=""
+        region_code=""
+       
+    }
+
+ 
+
+    stages {
+
+ 
+
+        stage('Parameters') {
+ 
+
+            steps {
+ 
+
+                echo "You have selected account: ${params.role_account}"
+                echo "You Selected: ${params.aws_region}"
+ 
+
+                script {
+                        
+                        DIR_PATH = "${WORKSPACE}/job_scheduling/compute_env"
+                        
+                      /*  if ("${params.aws_region}" == "eu-west-3"){
+                        region_code = "par"
+                        }else if ("${params.aws_region}" == "eu-west-1"){
+                        region_code = "ire"
+                        region_code = "${region_code}"
+                        } */
+
+ 
+                    }
+            }
+        }
+
+ 
+
+        stage('Checkout upsa-repo Repository') {
+
+ 
+
+            steps {
+
+ 
+
+                git branch: "${git_branch_name}",
+                    credentialsId: 'gitlab-cred-id',
+                    url: 'https://gitlab.dev.upsa.cf/Yomi.Ogunyinka/upsa-repos.git'
+            }
+        }
+
+ 
+
+        stage('Build Phase: create') {
+
+ 
+
+            when {
+
+ 
+
+                expression {
+
+ 
+
+                    params.build_option == 'create'
+
+ 
+
+                    }
+                }
+
+ 
+
+            steps {
+
+ 
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+ 
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+ 
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+ 
+
+                            dir ("${DIR_PATH}")  { 
+                                
+                                script {
+                                                                      
+                                   sh """
+                                      sed -i "s/COMPUTE_ENVIRONMENT_NAME/${compute_environment_name}/g" ${batch_compute_json_name}.json
+                                      echo "Creating Batch Compute Environment..."
+                                      aws batch create-compute-environment --cli-input-json file://${batch_compute_json_name}.json  --region ${params.aws_region}                            
+                                   """
+
+                        }
+
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Phase: delete') {
+
+ 
+
+            when {
+
+ 
+
+                expression {
+
+ 
+
+                    params.build_option == 'delete'
+
+ 
+
+                    }
+                }
+
+ 
+
+            steps {
+
+ 
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+ 
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+ 
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+ 
+
+                            dir ("${DIR_PATH}")  { 
+                                
+                                script {
+                                                                      
+                                   sh """
+                                      sed -i "s/COMPUTE_ENVIRONMENT_NAME/${compute_environment_name}/g" ${batch_compute_json_name}.json
+                                      echo "Deleting Batch Compute Environment..."
+                                      aws batch update-compute-environment --compute-environment ${compute_environment_name} --state DISABLED --region ${params.aws_region}                            
+                                      sleep 20
+                                      aws batch delete-compute-environment --compute-environment ${compute_environment_name} --region ${params.aws_region}                            
+                                   """
+
+                        }
+
+                        }
+                    }
+                }
+            }
+        }
+
+
+ 
+
+    }
+}
+
+
+
+ 

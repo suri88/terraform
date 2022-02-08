@@ -1,0 +1,251 @@
+pipeline {
+
+ 
+
+    agent any
+
+ 
+
+    parameters { 
+
+        choice(name: 'role_account',
+            choices: ['762127463824'],
+            description: "Which account would you like to create job queue")
+        
+        choice(name: 'role_account_name',
+            choices: ['cicd'],
+            description: 'Which account name would you like to create job queue?.. Example upsa-cicd')
+ 
+
+        choice(name: 'aws_region',
+            choices: ['eu-west-3'],
+            description: 'Where would you like to create compute env?.. Examples eu-west-1, eu-central-1') 
+
+
+        string(name: 'git_branch_name', defaultValue: '', description: 'git branch name')
+
+        string(name: 'batch_jobdef_json_name', defaultValue: 'job_definition_template', description: 'job definition json template name')
+        string(name: 'job_definition_name', defaultValue: '', description: 'Job Definition Name')        
+        string(name: 'docker_image_name', defaultValue: '', description: 'Docker Image Name for job defintion')
+        string(name: 'jobdef_iam_role_name', defaultValue: '', description: 'IAM Role of job defintion')
+
+        choice(name: 'build_option',
+            choices: ['','create','delete'],
+            description: 'For creating or deleting batch job definition')
+
+        
+    }
+
+ 
+    environment {
+
+        DIR_PATH=""
+        region_code=""
+       
+    }
+
+ 
+
+    stages {
+
+ 
+
+        stage('Parameters') {
+ 
+
+            steps {
+ 
+
+                echo "You have selected account: ${params.role_account}"
+                echo "You Selected: ${params.aws_region}"
+ 
+
+                script {
+                        
+                        DIR_PATH = "${WORKSPACE}/job_scheduling/job_definitions"
+                        
+                      /*  if ("${params.aws_region}" == "eu-west-3"){
+                        region_code = "par"
+                        }else if ("${params.aws_region}" == "eu-west-1"){
+                        region_code = "ire"
+                        region_code = "${region_code}"
+                        } */
+
+ 
+                    }
+            }
+        }
+
+ 
+
+        stage('Checkout upsa-repo Repository') {
+
+ 
+
+            steps {
+
+ 
+
+                git branch: "${git_branch_name}",
+                    credentialsId: 'gitlab-cred-id',
+                    url: 'https://gitlab.dev.upsa.cf/Yomi.Ogunyinka/upsa-repos.git'
+            }
+        }
+
+ 
+
+        stage('Build Phase: create') {
+
+ 
+
+            when {
+
+ 
+
+                expression {
+
+ 
+
+                    params.build_option == 'create'
+
+ 
+
+                    }
+                }
+
+ 
+
+            steps {
+
+ 
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+ 
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+ 
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+ 
+
+                            dir ("${DIR_PATH}")  { 
+                                
+                                script {
+                                                                      
+                                   sh """
+                                      sed -i "s/BATCH_JOB_DEFINITION_NAME/${job_definition_name}/g" ${batch_jobdef_json_name}.json
+                                      sed -i "s/AWS_ACCOUNT/${role_account}/g" ${batch_jobdef_json_name}.json
+                                      sed -i "s/AWS_REGION/${aws_region}/g" ${batch_jobdef_json_name}.json
+                                      sed -i "s;DOCKER_IMAGE;${docker_image_name};g" ${batch_jobdef_json_name}.json
+                                      sed -i "s/IAM_ROLE_NAME/${jobdef_iam_role_name}/g" ${batch_jobdef_json_name}.json
+                                      echo "Creating Batch Job Definition..."
+                                      aws batch register-job-definition --cli-input-json file://${batch_jobdef_json_name}.json --region ${params.aws_region}                                                                                                        
+                                   """
+
+                        }
+
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Phase: delete') {
+
+ 
+
+            when {
+
+ 
+
+                expression {
+
+ 
+
+                    params.build_option == 'delete'
+
+ 
+
+                    }
+                }
+
+ 
+
+            steps {
+
+ 
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+ 
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+ 
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+ 
+
+                            dir ("${DIR_PATH}")  { 
+                                
+                                script {
+                                                                      
+                                  sh """
+                                      sed -i "s/BATCH_JOB_DEFINITION_NAME/${job_definition_name}/g" ${batch_jobdef_json_name}.json
+                                      sed -i "s/AWS_ACCOUNT/${role_account}/g" ${batch_jobdef_json_name}.json
+                                      sed -i "s/AWS_REGION/${aws_region}/g" ${batch_jobdef_json_name}.json
+                                      sed -i "s;DOCKER_IMAGE;${docker_image_name};g" ${batch_jobdef_json_name}.json
+                                      sed -i "s/IAM_ROLE_NAME/${jobdef_iam_role_name}/g" ${batch_jobdef_json_name}.json
+                                      echo "Deleting Batch Job Definition..."
+                                      aws batch deregister-job-definition --job-definition ${job_definition_name} --region ${params.aws_region}                                                                                                        
+                                   """
+
+                        }
+
+                        }
+                    }
+                }
+            }
+        }
+
+
+ 
+
+    }
+}
+
+
+
+ 
