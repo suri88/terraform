@@ -1,0 +1,6 @@
+    {
+       
+        "source_ami": "ami-0697b068b80d79421",
+        "instance_type": "t2.micro"
+
+    }

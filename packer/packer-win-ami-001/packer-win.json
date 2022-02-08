@@ -1,0 +1,53 @@
+{
+
+    "variables": {
+
+        "user_data_file": "",
+        "source_ami": "",
+        "instance_type": ""
+  },
+     
+   
+    
+    "builders": [{
+         
+    
+        "type": "amazon-ebs",
+        "region": "eu-west-3",
+        "ami_name": "Packer-windows-{{timestamp}}",
+	    "instance_type": "{{user `instance_type`}}",
+        "source_ami": "{{user `source_ami`}}",
+	    "user_data_file": "{{user `user_data_file`}}",
+        "associate_public_ip_address": false,
+        "communicator": "winrm",
+        "winrm_username": "Administrator",
+        "winrm_use_ssl": true,
+        "winrm_insecure": true,
+        "tags":{
+		"Name": "windows-packer-poc-{{timestamp}}"
+	  }
+
+    }],
+    
+
+    "provisioners": [
+        {
+            "type": "powershell",
+            "script": "init.ps1"
+        },
+ {
+            "type": "powershell",
+            "inline": [
+                "Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole",
+                "Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer"
+            ]
+        },
+	{
+            "type": "powershell",
+            "inline": [
+                "C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Scripts\\InitializeInstance.ps1 -Schedule",
+                "C:\\ProgramData\\Amazon\\EC2-Windows\\Launch\\Scripts\\SysprepInstance.ps1 -NoShutdown"
+            ]
+        }
+    ]
+}

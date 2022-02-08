@@ -1,0 +1,11 @@
+{
+"LambdaFunctionConfigurations": [
+    {
+      "Id": "s3eventtriggerslambda",
+      "LambdaFunctionArn": "arn:aws:lambda:eu-west-3:762127463824:function:submit_batch_job_from_s3",
+      "Events": ["s3:ObjectCreated:Put"]
+      s3:ObjectCreated:Put
+
+    },
+  ]
+}

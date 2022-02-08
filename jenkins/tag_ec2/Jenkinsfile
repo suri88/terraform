@@ -1,0 +1,323 @@
+pipeline {
+
+    agent any
+
+    parameters {
+
+        choice(name: 'role_account',
+            choices: ['707783183724','762127463824','417417470155','919173928247','977425150090','734839700165'],
+            description: "Which account would you like to deploy your RDS?\n 707783183724:ntw\n762127463824:cicd\n417417470155:sss\n919173928247:talendDev\n977425150090:ReportingDev\n734839700165:CyberArk")
+
+        choice(name: 'role_account_name',
+
+            choices: ['upsa-cicd','upsa-sharedservices','upsa-network','upsa-talend','upsa-cyberark'],
+            description: 'Which account name would you like to deploy your VPC?.. Example upsa-sharedservices')
+
+
+        choice(name: 'app_env_name',
+                choices: ['dev','sit','uat','prd','NA'],
+                description: 'Which environment name would you like to deploy your EC2?.. Example dev')
+
+        choice(name: 'aws_region',
+            choices: ['eu-west-3'],
+            description: 'Where would you like to deploy your EC2?.. Examples eu-west-1, eu-central-1')
+
+        string(name: 'ec2_path',defaultValue: '', description: 'ec2 path')
+
+        string(name: 'instance_count',defaultValue: '', description: 'count of ec2 instance')
+
+        string(name: 'git_branch_name', defaultValue: '', description: 'git branch name')
+
+        string(name: 'os_type', defaultValue: '', description: 'os_type')
+
+        string(name: 'subnet_role', defaultValue: '', description: 'subnet_role')
+
+        choice(name: 'env_variables',
+                choices: ['paris'],
+                description: 'Please select the variable file to apply.. Examples paris')
+
+        choice(name: 'build_option',
+            choices: ['','plan','apply', 'destroy'],
+            description: 'Apply will deploy a EC2, and Destroy will remove the EC2..')
+
+
+    }
+
+    environment {
+
+        AWS_DEFAULT_REGION = "${params.aws_region}"
+        BUILD_OPTION = "${params.build_option}"
+        TF_HOME = tool('terraform-0.12.12')
+        TF_IN_AUTOMATION = "true"
+        PATH = "$TF_HOME:$PATH"
+        DIR_PATH=""
+        BACKEND_HCL_PATH=""
+        resource_name = ""
+        random_number=0  
+
+    }
+   
+    stages {
+
+        stage('Parameters') {
+
+            steps {
+               script {
+                    if("${params.app_env_name}" != "NA") {
+                        echo "Environment is ${app_env_name}"
+                        DIR_PATH = "terraform/accounts/${params.role_account_name}/${params.app_env_name}/ec2/${params.ec2_path}"
+                        BACKEND_HCL_PATH = "../.."
+
+                    } else {
+                        echo "Environment is not Applicable.."
+                        DIR_PATH = "terraform/accounts/${params.role_account_name}/ec2/${params.ec2_path}"
+                        BACKEND_HCL_PATH = "../.."
+                    }
+
+                }
+
+                echo "You have selected account: ${params.role_account}"
+                echo "You Selected: ${params.aws_region}"
+                script {
+                    if ("${params.aws_region}" == "eu-west-3"){
+                    resource_name = "PAR"
+                    resource_name = "${resource_name}" + "SVR"
+                    }else if ("${params.aws_region}" == "eu-west-1"){
+                    resource_name = "IRE"
+                    resource_name = "${resource_name}" + "SVR"
+                    }
+                    if ("${params.app_env_name}" == "dev") {
+                    resource_name = "${resource_name}" + "D"
+                    }else if ("${params.app_env_name}" == "sit"){
+                    resource_name = "${resource_name}" + "T"
+                    }else if ("${params.app_env_name}" == "uat"){
+                    resource_name = "${resource_name}" + "T"
+                    }else if ("${params.app_env_name}" == "prd"){
+                    resource_name = "${resource_name}" + "P" 
+                    }
+                    if("${os_type}" == "windows"){
+                    resource_name = "${resource_name}" + "W"
+                    }else if("${os_type}" == "linux") {
+                    resource_name = "${resource_name}" + "L"
+                    }
+
+                    if("${subnet_role}" == "app"){
+                    resource_name = "${resource_name}" + "AP"
+                    }else if("${subnet_role}" == "web"){
+                    resource_name = "${resource_name}" + "WB"
+                    }else if("${subnet_role}" == "db"){
+                    resource_name = "${resource_name}" + "DB"
+                    }
+                    
+                }
+                
+
+                
+            }
+        }
+
+        stage('Clean Directory') {
+
+            steps {
+
+                deleteDir()
+            }
+        }        
+
+        stage('Checkout upsa-repo Repository') {
+
+            steps {
+
+                git branch: "${git_branch_name}",
+                    credentialsId: 'gitlab-cred-id',
+                    url: 'https://gitlab.dev.upsa.cf/Yomi.Ogunyinka/upsa-repos.git'
+            }
+        }
+
+        stage('Build Phase: Plan') {
+
+            when {
+
+                expression {
+
+                    params.build_option == 'plan'
+
+                    }
+                }
+
+            steps {
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+                        
+                            dir ("${DIR_PATH}")
+                        {
+                            sh "terraform -version"
+                            sh "terraform init -backend-config=${BACKEND_HCL_PATH}/backend.hcl"
+                            sh "terraform get"
+                            sh 'terraform ${build_option} -var="region=${aws_region}" \
+                                -var-file="${env_variables}".tfvars '                            
+
+                        }
+                        
+                    }
+                }
+            }
+        }
+        stage('Build Phase: Apply') {
+
+            when {
+
+                expression {
+
+                    params.build_option == 'apply'
+
+                    }
+                }
+
+            steps {
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+
+                        script{ 
+                        def code_unique = false
+                        def target_resource_name = ""
+                        
+                        while ( code_unique == false ){  
+
+                        //code for generating random number
+                        def random_number = Math.abs(new Random().nextInt() % 999) + 001
+                                                
+                        resource_name = "${resource_name}"+random_number
+                        echo "${resource_name}"
+                        
+                        target_resource_name=sh returnStdout: true, script: """ aws dynamodb get-item --table-name cicd-dynamodb-ec2-inventory-tbl --key '{"instance_name": {"S": "${resource_name}"}}'"""
+                        target_resource_name = target_resource_name.trim()
+
+                        echo "${target_resource_name}"
+                        echo "${subnet_role}"
+                        if ("${target_resource_name}" == "") { 
+                            code_unique = true                                            
+                                                                                    
+                         }else {
+                             echo "Regenerating random number"
+                         }   
+                        }
+                        sh """
+                        aws dynamodb put-item --table-name cicd-dynamodb-ec2-inventory-tbl --item '{"instance_name": {"S": "${resource_name}"}, "env_name": {"S": "${app_env_name}"}}'
+                        
+                        """
+                       sh """
+                            sed -i "s/vm_name/\\${resource_name}/g" terraform/accounts/${params.role_account_name}/ec2/${params.ec2_path}/"${env_variables}".tfvars
+                            sed -i "s/inst_count/${instance_count}/g" terraform/accounts/${params.role_account_name}/ec2/${params.ec2_path}/"${env_variables}".tfvars
+                            sed -i 's/s_type/'\'${subnet_role}'\'/g' terraform/accounts/${params.role_account_name}/ec2/${params.ec2_path}/"${env_variables}".tfvars
+                        """
+                                               
+                        }
+
+
+                            dir ("${DIR_PATH}")
+
+                        {
+                            sh "terraform -version"
+                            sh "terraform init -backend-config=${BACKEND_HCL_PATH}/backend.hcl"
+                            sh "terraform get"
+                            sh 'terraform ${build_option} -var="region=${aws_region}" \
+                                -var-file=${env_variables}.tfvars -auto-approve'
+                           
+                        }
+
+                 
+
+                        
+                    }
+                }
+            }
+        }
+         stage('Build Phase: Destroy') {
+
+            when {
+
+                expression {
+
+                    params.build_option == 'destroy'
+
+                    }
+                }
+
+            steps {
+
+                    withCredentials(
+                        [
+                            string(credentialsId: 'ExternalId', variable: 'external_id')
+                        ]
+                    )
+
+                        {
+                            echo "Applying AWS Credentials!.."
+
+                    withAWS(credentials: 'aws-credentials',
+                            region: "${params.aws_region}",
+                            role:'jenkins',
+                            roleAccount:"${params.role_account}",
+                            externalId: "$external_id",
+                            duration: 900,
+                            roleSessionName: 'jenkins-session')
+                        {
+                            echo "This will be deployed into account ${params.role_account}"
+                            echo "This will be deployed into the ${params.aws_region} region"
+
+                            dir ("${DIR_PATH}")
+
+                        {
+                            sh "terraform -version"
+                            sh "terraform init -backend-config=${BACKEND_HCL_PATH}/backend.hcl"
+                            sh "terraform get"
+                            sh 'terraform ${build_option} -var="region=${aws_region}" \
+                                -var-file=${env_variables}.tfvars -auto-approve'
+                        }
+                    }
+                }
+            }
+        }
+
+    }    
+
+}
