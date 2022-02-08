@@ -1,7 +1,0 @@
-# lambda_input.yaml file
-
-region: 'eu-west-3'
-batch_endpoint_url: 'https://batch.eu-west-3.amazonaws.com'
-batch_cloudwatch_log_group: '/aws/batch/job'
-execution_type: 'auto'   #either auto(for automation triggers through s3) or cron(for scheduled jobs through cloud watch)
-

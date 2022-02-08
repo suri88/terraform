@@ -1,7 +1,0 @@
-    {
-        "user_data_file": "./ec2-userdata.ps1",
-
-        "source_ami": "ami-0ace5ff23b1a4725d",
-        "instance_type": "t2.micro"
-
-    }

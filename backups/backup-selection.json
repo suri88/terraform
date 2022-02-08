@@ -1,9 +1,0 @@
-{
-    "SelectionName": "Backups",
-    "IamRoleArn": "arn:aws:iam::VAR-ACCOUNT:role/service-role/AWSBackupDefaultServiceRole",
-    "ListOfTags": [{
-        "ConditionType": "STRINGEQUALS",
-        "ConditionKey": "backup",
-        "ConditionValue": "yes"
-    }]
-}

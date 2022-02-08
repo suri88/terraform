@@ -1,7 +1,0 @@
-# input.yaml file for each job
-region: 'eu-west-3'
-execution_type: 'auto'   #either auto(for automation triggers through s3) or cron(for scheduled jobs through cloud watch)
-job_name: 'job_app7'
-job_queue: 'Job_Queue_Application1'
-job_definition: 'Job_Def_Windows_Application1'
-
